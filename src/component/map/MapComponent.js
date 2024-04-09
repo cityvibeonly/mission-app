@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
+import React from "react";
+import axios from 'axios';
 import Draw from "ol/interaction/Draw.js";
 import Map from "ol/Map.js";
 import Overlay from "ol/Overlay.js";
@@ -10,6 +12,7 @@ import { Tile as TileLayer, Vector as VectorLayer } from "ol/layer.js";
 import { getArea, getLength } from "ol/sphere.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import TileWMS from "ol/source/TileWMS.js";
+import {getUid} from 'ol/util';
 import { bbox } from "ol/loadingstrategy.js";
 import { SketchPicker } from "react-color";
 import reactCSS from "reactcss";
@@ -19,12 +22,93 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
-import Paper from "@mui/material/Paper";
 import Draggable from "react-draggable";
-import Box from "@mui/material/Box";
-import Slider from "@mui/material/Slider";
+import {Box, Slider,Paper} from "@mui/material";
+
 // import ImageWMS from "ol/source/ImageWMS.js";
 // import ImageLayer from "ol/layer/Image.js";
+import proj4 from "proj4";
+import {register} from 'ol/proj/proj4.js';
+import Projection from 'ol/proj/Projection.js';
+import { AlignHorizontalLeftSharp } from "@mui/icons-material";
+
+
+proj4.defs([
+	['EPSG:4326', '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'],
+	[
+		'EPSG:3857',
+		'+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +no_defs',
+	],
+	[
+		'EPSG:5173',
+		'+proj=tmerc +lat_0=38 +lon_0=125.0028902777778 +k=1 +x_0=200000 +y_0=500000 +ellps=bessel +units=m +no_defs',
+	],
+	[
+		'EPSG:5174',
+		'+proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=200000 +y_0=500000 +ellps=bessel +units=m +no_defs',
+	],
+	[
+		'EPSG:5175',
+		'+proj=tmerc +lat_0=38 +lon_0=127.0028902777778 +k=1 +x_0=200000 +y_0=550000 +ellps=bessel +units=m +no_defs',
+	],
+	[
+		'EPSG:5176',
+		'+proj=tmerc +lat_0=38 +lon_0=129.0028902777778 +k=1 +x_0=200000 +y_0=500000 +ellps=bessel +units=m +no_defs',
+	],
+	[
+		'EPSG:5177',
+		'+proj=tmerc +lat_0=38 +lon_0=131.0028902777778 +k=1 +x_0=200000 +y_0=500000 +ellps=bessel +units=m +no_defs',
+	],
+	[
+		'EPSG:5178',
+		'+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=bessel +units=m +no_defs',
+	],
+	[
+		'EPSG:5179',
+		'+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5180',
+		'+proj=tmerc +lat_0=38 +lon_0=125 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5181',
+		'+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5182',
+		'+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=550000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5183',
+		'+proj=tmerc +lat_0=38 +lon_0=129 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5184',
+		'+proj=tmerc +lat_0=38 +lon_0=131 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5185',
+		'+proj=tmerc +lat_0=38 +lon_0=125 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5186',
+		'+proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5187',
+		'+proj=tmerc +lat_0=38 +lon_0=129 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	[
+		'EPSG:5188',
+		'+proj=tmerc +lat_0=38 +lon_0=131 +k=1 +x_0=200000 +y_0=600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+	],
+	['EPSG:32651', '+proj=utm +zone=51 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'],
+	['EPSG:32652', '+proj=utm +zone=52 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'],
+]);
+
+register(proj4);
+
 
 export default function MainMap() {
   const mapStyle = {
@@ -32,7 +116,9 @@ export default function MainMap() {
     height: 550,
   };
 
-
+  const projection = new Projection({
+    code: 'EPSG:3857',
+  });
 
   const [map, setMap] = useState("");
   const [measurementType, setMeasurementType] = useState(""); // 'length' or 'area'
@@ -40,10 +126,22 @@ export default function MainMap() {
   const [layerType, setLayerType] = useState(""); // 'tile' or 'vector'
   const [drawInteraction, setDrawInteraction] = useState("");
   const [measurementOverlay, setMeasurementOverlay] = useState("");
+  const [tileWmsSource, _setTileWmsSource] = useState("")
+  const tileWmsSourceRef = useRef(tileWmsSource);
+  const setTileWmsSource = (tileWmsSource) => {
+    tileWmsSourceRef.current = tileWmsSource;
+    _setTileWmsSource(tileWmsSource)
+  }
+  const [wmsFeatInfoJson, _setWmsFeatInfoJson] = useState("")
+  const wmsFeatInfoJsonRef = useRef(wmsFeatInfoJson)
+  const setWmsFeatInfoJson = (wmsHTML) => {
+    wmsFeatInfoJsonRef.current = wmsHTML;
+    _setWmsFeatInfoJson(wmsHTML)
+  }
   const [addedLayer, setAddedLayer] = useState("");
-  const [featureDialogOpen, setDialogOpen] = useState(false);
-  const [displayColorPicker, setDisplayColorPicker] = useState(false);
-  const [colorStyle, setColorStyle] = useState({
+  const [featureDialogOpen, setFeatureDialogOpen] = useState(false);
+  const [displayFeatureColorPicker, setDisplayFeatureColorPicker] = useState(false);
+  const [featureColorStyle, setFeatureColorStyle] = useState({
     color: {
       r: "241",
       g: "112",
@@ -51,16 +149,85 @@ export default function MainMap() {
       a: "1",
     },
   });
-  const [widthStyle, setWidthStyle] = useState({
-    width: 2,
-  });
   const [dialogSize, setDialogSize] = useState({
-    width: 1000,
-    height: 1000,
+    width: 400,
+    height: 400,
   });
-  const [featureInfo, setFeatureInfo] = useState([]);
+  const [featureInfo, setFeatureInfo] = useState(null);
   const [displayStyleButton, setDisplayStyleButton] = useState(false);
   const [layerDialogOpen, setLayerDialogOpen] = useState(false);
+  // fill color
+  const [displayFillPicker, setDisplayFillPicker] = useState(false)
+  const [fillColorStyle, setFillColorStyle] = useState({ // 값 바뀌는 구조 그대로 초기값 셋팅해주기
+    color: {
+      r: "255",
+      g: "205",
+      b: "92",
+      a: "77",
+    },
+  });
+  const [vectorFillColor, setVectorFillColor] = useState({
+    color: {
+      r: "255",
+      g: "205",
+      b: "92",
+      a: "77",
+    },
+  })
+    // stroke color
+  const [displayStrokePicker, setDisplayStrokePicker] = useState(false)
+  const [strokeColorStyle, setStrokeColorStyle] = useState({ // 값 바뀌는 구조 그대로 초기값 셋팅해주기
+    color: {
+      r: "0",
+      g: "0",
+      b: "0",
+      a: "1",
+    },
+  });
+  const [vectorStrokeColor, setVectorStrokeColor] = useState({
+    color: {
+      r: "0",
+      g: "0",
+      b: "0",
+      a: "1",
+    },
+  })
+  // stroke width
+  const [strokeWidth, setStrokeWidth] = useState(2);
+  // point color
+  const [displayPointPicker, setDisplayPointPicker] = useState(false)
+  const [vectorPointColor, setVectorPointColor] = useState({
+    color: {
+      r: "255",
+      g: "205",
+      b: "92",
+      a: "77",
+    },
+  })
+  const [pointColorStyle, setPointColorStyle] = useState({
+    color: {
+      r: "255",
+      g: "205",
+      b: "92",
+      a: "77",
+    },
+  })
+  // point radius
+  const [pointRadius, setPointRadius] = useState(7)
+  const [filter, _setFilter] = useState('')
+  const filterRef = useRef(filter);
+  const setFilter = (value) => {
+    filterRef.current = value;
+    _setFilter(value)
+  }
+  const [filterButton, setFilterButton] = useState(false)
+
+  const view = new View({
+    center: [14134735.270495, 4518651.364106],
+    zoom: 11,
+    minZoom: 5.5,
+    maxZoom: 20,
+  })
 
   // 맵 생성
   useEffect(() => {
@@ -70,15 +237,11 @@ export default function MainMap() {
         source: new OSM(),
       });
 
+
       const newMap = new Map({
         layers: [raster],
         target: "map",
-        view: new View({
-          center: [14134735.270495, 4518651.364106],
-          zoom: 11,
-          minZoom: 5.5,
-          maxZoom: 20,
-        }),
+        view: view
       });
 
       setMap(newMap);
@@ -184,25 +347,41 @@ export default function MainMap() {
     return element;
   };
 
-  // 레이어 유형 전환
-  const handleLayerTypeChange = (type) => {
-    setLayerType(type);
+  // 버튼 누르면 매개변수 타입에 따라 다른 레이어가 지도 위에 표출
+  const handleLayerTypeChange = (type) => { 
+    setLayerType(prev => { 
+      if(prev !== type) { // 조건: 현재의 값이 새로 받아온 type과 다를 경우
+        onChangeLayerStyle(type); // 지도에 레이어 띄우는 함수를 실행
+        return type; // 받아온 type으로 layerType state 업데이트
+      }
+    });
+
   };
 
+
   // 타일 생성
-  const createTileLayer = (layerName) => {
+  const createTileLayer = (layerName, filter) => {
     console.log("tile");
     const extent = [
       14062120.093624081, 4488076.55279193, 14207350.447365917,
       4549226.175420071,
     ];
+
+    const wmsSource =  new TileWMS({
+      url: "http://127.0.0.1:8080/geoserver/foss/wms",
+      params: { 'LAYERS': `foss:${layerName}`, 
+        'TILED': true,
+        'CQL_FILTER' : filter,
+      },
+    })
+
+    setTileWmsSource(wmsSource);
+
     return new TileLayer({
       extent: extent,
-      source: new TileWMS({
-        url: "http://127.0.0.1:8080/geoserver/foss/wms",
-        params: { LAYERS: `foss:${layerName}`, TILED: true },
-      }),
+      source:wmsSource,
       serverType: "geoserver",
+      crossOrigin: 'anonymous',
     });
     // return new TileLayer({
     //   extent: extent,
@@ -215,25 +394,236 @@ export default function MainMap() {
     // });
   };
 
-  // 벡터 기본 스타일 지정
-  const style = new Style({
-    fill: new Fill({
-      color: "#eeeeee",
-    }),
-    stroke: new Stroke({
-      color: "#000000",
-      width: 2,
-    }),
-    image: new CircleStyle({
-      radius: 7,
-      fill: new Fill({
-        color: "#000000",
-      }),
-    }),
-  });
+  const handleSelectedFilterChange = (e) => {
+    filterRef.current = e.target.value
+    setFilter(filterRef.current)
+    console.log(filter)
+    // console.log(filterRef.current)
+    setLayerType("tile");
+    onChangeLayerStyle(layerType, filterRef.current);
+  };
 
-  // 벡터 생성
+
+  const fileterNames = [
+    'pop2007 > 30000',
+    'pop2007 > 100000',
+    'pop2008 > 30000',
+    'pop2008 > 100000'
+    ];
+
+
+// 벡터 레이어 스타일 편집
+const handleLayerDialogOpen = () => {
+  setLayerDialogOpen(true)
+}
+
+const handleLayerDialogClose = () => {
+  setLayerDialogOpen(false)
+}
+
+// fill color
+const fillColorBarStyles = reactCSS({
+  default: {
+    color: {
+      width: "36px",
+      height: "14px",
+      borderRadius: "2px",
+      background: `rgba(${vectorFillColor.color.r}, ${vectorFillColor.color.g}, ${vectorFillColor.color.b}, ${vectorFillColor.color.a})`,
+    },
+    swatch: {
+      padding: "5px",
+      background: "#fff",
+      borderRadius: "1px",
+      boxShadow: "0 0 0 1px rgba(0,0,0,.1)",
+      display: "inline-block",
+      cursor: "pointer",
+    },
+    popover: {
+      position: "absolute",
+      zIndex: "2",
+    },
+    cover: {
+      position: "fixed",
+      top: "0px",
+      right: "0px",
+      bottom: "0px",
+      left: "0px",
+    },
+  },
+});
+
+const handleFillPickerOpen = () => {
+  setDisplayFillPicker(true)
+}
+
+const handleFillColorPickerClose = () => {
+  setDisplayFillPicker(false)
+}
+
+const handleFillColorChange = (color) => {
+  const selectColor = { color: color.rgb };
+  setFillColorStyle(selectColor)
+  setVectorFillColor(selectColor)
+  
+  //  new Style({
+  //   fill: new Fill({
+  //     color: vectorFillColor,
+  //   }),
+  //   stroke: new Stroke({
+  //     color: defaultLayerStrokeColor,
+  //     width: 2,
+  //   }),
+  //   // image: new CircleStyle({
+  //   //   fill: new Fill({
+  //   //     color: "#123456"
+  //   //   })
+  //   // })
+  // });
+}
+
+// Stroke color
+const strokeColorBarStyles = reactCSS({
+  default: {
+    color: {
+      width: "36px",
+      height: "14px",
+      borderRadius: "2px",
+      background: `rgba(${vectorStrokeColor.color.r}, ${vectorStrokeColor.color.g}, ${vectorStrokeColor.color.b}, ${vectorStrokeColor.color.a})`,
+    },
+    swatch: {
+      padding: "5px",
+      background: "#fff",
+      borderRadius: "1px",
+      boxShadow: "0 0 0 1px rgba(0,0,0,.1)",
+      display: "inline-block",
+      cursor: "pointer",
+    },
+    popover: {
+      position: "absolute",
+      zIndex: "2",
+    },
+    cover: {
+      position: "fixed",
+      top: "0px",
+      right: "0px",
+      bottom: "0px",
+      left: "0px",
+    },
+  },
+});
+
+const handleStrokePickerOpen = () => {
+  setDisplayStrokePicker(true)
+}
+
+const handleStrokePickerClose = () => {
+  setDisplayStrokePicker(false)
+}
+
+const handleStrokeColorChange = (color) => {
+  const selectColor = { color: color.rgb };
+  setStrokeColorStyle(selectColor)
+  setVectorStrokeColor(selectColor)
+}
+
+// Stroke Width
+  // slider
+const strokeWidthSliderValue = (value) => {
+  setStrokeWidth(value)
+  return value;
+};
+
+// point color
+const pointColorBarStyles = reactCSS({
+  default: {
+    color: {
+      width: "36px",
+      height: "14px",
+      borderRadius: "2px",
+      background: `rgba(${vectorPointColor.color.r}, ${vectorPointColor.color.g}, ${vectorPointColor.color.b}, ${vectorPointColor.color.a})`,
+    },
+    swatch: {
+      padding: "5px",
+      background: "#fff",
+      borderRadius: "1px",
+      boxShadow: "0 0 0 1px rgba(0,0,0,.1)",
+      display: "inline-block",
+      cursor: "pointer",
+    },
+    popover: {
+      position: "absolute",
+      zIndex: "2",
+    },
+    cover: {
+      position: "fixed",
+      top: "0px",
+      right: "0px",
+      bottom: "0px",
+      left: "0px",
+    },
+  },
+});
+
+const handlePointPickerOpen = () => {
+  setDisplayPointPicker(true)
+}
+
+const handlePointPickerClose = () => {
+  setDisplayPointPicker(false)
+}
+
+const handlePointColorChange = (color) => {
+  const selectColor = { color: color.rgb };
+  setPointColorStyle(selectColor)
+  setVectorPointColor(selectColor)
+}
+
+// point radius
+  // slider
+const pointRadiusSliderValue = (value) => {
+  setPointRadius(value)
+  return value;
+};
+
+// save button
+const handleLayerDialogSave = () => {
+  onChangeLayerStyle(layerType); // 레이어 스타일 편집 다이얼로그 저장 버튼을 눌렀을 시, 변경된 내용으로 레이어 표출
+  setLayerDialogOpen(false);
+}
+
+  // 벡터 레이어 style function
+  const style =  function (feature) {
+      const selectedLayerStyle = new Style({
+        fill: new Fill({
+          color: `rgba(${vectorFillColor.color.r}, ${vectorFillColor.color.g}, ${vectorFillColor.color.b}, ${vectorFillColor.color.a})`,
+        }),
+        stroke: new Stroke({
+          color: `rgba(${vectorStrokeColor.color.r}, ${vectorStrokeColor.color.g}, ${vectorStrokeColor.color.b}, ${vectorStrokeColor.color.a})`,
+          width: strokeWidth,
+        }),
+        image: new CircleStyle({
+          radius: pointRadius,
+          fill: new Fill({
+            color: `rgba(${vectorPointColor.color.r}, ${vectorPointColor.color.g}, ${vectorPointColor.color.b}, ${vectorPointColor.color.a})`,
+          }),
+        }),
+      });
+      return selectedLayerStyle;
+    }
+
+  // 벡터 레이어 생성
+
+  /**
+   * @function createVectorLayer
+   * @description 벡터레이어 생성
+   * @author 김채은
+   * @param { String } layerName 레이어 이름
+   * @returns 
+   */
   const createVectorLayer = (layerName) => {
+    /**
+     * @copyright Mango System
+     */
     const vectorSource = new VectorSource({
       format: new GeoJSON(),
       loader: function (extent, resolution, projection) {
@@ -266,44 +656,30 @@ export default function MainMap() {
       title: layerName,
       source: vectorSource,
       style: style,
-
-      // Style Function 사용하기
-      // function (feature) {
-      // const fillColor = '#ee00ee';
-      // const strokeColor = '#0e0ee0';
-      //   const strokeWidth = 2;
-      //   // debugger;
-      // style.getFill().setColor(fillColor);
-      // style.getStroke().setColor(strokeColor);
-      // style.getStroke().setWidth(strokeWidth);
-      //   //style.getImage().setColor(strokeColor);
-      //   style.getImage(new CircleStyle({
-      //     radius: 5,
-      //     fill: new Fill({
-      //       color: 'red'
-      //     })
-      //   }))
-
-      //   return style;
-      // }
     });
   };
 
-  // map에 레이어 추가
-  useEffect(() => {
-    if (map && selectedLayer && layerType) {
+  // 맵에 레이어 추가
+  const onChangeLayerStyle = (layerType, filter) => { 
+    if (map && selectedLayer) {
       // 이미 추가된 레이어 있는 경우 모든 레이어 제거
       if (addedLayer) {
         map.removeLayer(addedLayer);
+        setFilterButton(false);
+        setDisplayStyleButton(false);
       }
+
+      console.log('selectedLayer: ', selectedLayer);
 
       let layer;
       if (layerType === "tile") {
-        layer = createTileLayer(selectedLayer);
+        layer = createTileLayer(selectedLayer, filter);
+        setFilterButton(true)
       } else if (layerType === "vector") {
         layer = createVectorLayer(selectedLayer);
-      } else {
-      }
+        // 해당레이어의 스타일을 변경하는 버튼 표출
+        setDisplayStyleButton(true);
+      } 
 
       // 만들어진 레이어를 addLayer로 세팅
       setAddedLayer(layer);
@@ -311,21 +687,67 @@ export default function MainMap() {
       // 새로운 레이어 추가
       map.addLayer(layer);
 
-      // 해당레이어의 스타일을 변경하는 버튼 표출
-      setDisplayStyleButton(true);
+
+
+      map.on('singleclick', function (evt) {
+        // let wmsFeatInfo = document.getElementById('#info').innerHTML
+        // wmsFeatInfo = '';
+        console.log(layer);
+        const viewResolution = /** @type {number} */ (view.getResolution());
+
+        console.log(tileWmsSourceRef.current)
+
+        // setTileWmsSource(tileWmsSourceRef.current)
+        console.log(projection.getCode())
+
+
+        const proj = projection.getCode()
+        var url = layer.getSource().getFeatureInfoUrl(
+            evt.coordinate, viewResolution, proj,
+            { INFO_FORMAT: 'application/json',
+              }
+        );
+
+        if (url) {
+          axios.get(url)
+          .then((response) => {
+            debugger
+            let featureInfo = response.data.feature[0].properties;
+            let key = [];
+            let container = document.getElementById('#info');
+            let info = document.createElement('div');
+            info.className = ''
+            // debugger
+            // const parsed = response.json();
+            // wmsFeatInfoJsonRef.current = createElement('div', null, parsed)
+          })
+        }
+
+      // console.log(url)
+    });
+
+    // map.on('pointermove', function (evt) {
+    //   if (evt.dragging) {
+    //     return;
+    //   }
+    //   const data = layer.getData(evt.pixel);
+
+    // })
+      
 
       selectElement.onchange = changeInteraction;
       changeInteraction();
     }
-  }, [map, selectedLayer, layerType]);
+  }
 
 
   // Select Feature
   let select = null;
 
+  const featureDefaultColor = '#00ee00'
   const selected = new Style({
     fill: new Fill({
-      color: '#000000',
+      color: featureDefaultColor,
     }),
     stroke: new Stroke({
       color: 'rgba(255, 255, 255, 0.7)',
@@ -333,11 +755,11 @@ export default function MainMap() {
     }),
   });
 
-    function selectStyle(feature) {
-      const color = '#000000';
-      selected.getFill().setColor(color);
-      return selected;
-    }
+  function selectStyle(feature) {
+    const color = featureDefaultColor;
+    selected.getFill().setColor(color);
+    return selected;
+  }
 
   const selectSingleClick = new Select({ style: selectStyle });
 
@@ -345,12 +767,38 @@ export default function MainMap() {
     condition: click,
     style: selectStyle,
   });
+
+
   selectClick.on("select", (e) => {
-    console.log(e.selected)
-    const selectedFeature = e.selected
-    setFeatureInfo(selectedFeature)
-    console.log(featureInfo)
-    handleDialogOpen();
+    // const keys = e.selected[0].getKeys()
+    // console.log(keys)
+
+    // const length = e.selected[0].getKeys().length
+    // console.log(length)
+
+    setFeatureInfo(e.selected[0].getProperties());
+    setFeatureDialogOpen(true);
+
+
+    // const featureInfo = document.getElementById('#feature-info')
+
+    // document.write('<table border="1">');
+    // for (let tr = 1; tr <= length; tr++){
+    //   document.write('<tr>')
+    //   //for(let i = 0; i <= 1 ; i++) {
+    //     const values = e.selected[0].get(keys[tr])
+    //     document.write('<td>');
+    //     document.write(keys[tr])
+    //     document.write('</td>');
+    //     document.write('<td>');
+    //     document.write(values)
+    //     document.write('</td>');
+    //   //}
+    //   document.write('</tr>')
+    // }
+    // document.write('</table>');
+    
+    // handleFeatureDialogOpen();
   });
 
   const selectPointerMove = new Select({
@@ -372,13 +820,13 @@ export default function MainMap() {
       map.removeInteraction(select);
     }
     const value = selectElement.value;
-    if (value == "singleclick") {
+    if (value === "singleclick") {
       select = selectSingleClick;
-    } else if (value == "click") {
+    } else if (value === "click") {
       select = selectClick;
-    } else if (value == "pointermove") {
+    } else if (value === "pointermove") {
       select = selectPointerMove;
-    } else if (value == "altclick") {
+    } else if (value === "altclick") {
       select = selectAltClick;
     } else {
       select = null;
@@ -386,7 +834,7 @@ export default function MainMap() {
     if (select !== null) {
       map.addInteraction(select);
       select.on("select", function (e) {
-        document.getElementById("status").innerHTML =
+        document.getElementById("status").innerHTML = 
           "&nbsp;" +
           e.target.getFeatures().getLength() +
           " selected features (last operation selected " +
@@ -394,6 +842,7 @@ export default function MainMap() {
           " and deselected " +
           e.deselected.length +
           " features)";
+
       });
     }
   };
@@ -410,91 +859,11 @@ export default function MainMap() {
     );
   };
 
-  const handleDialogOpen = () => {
-    setDialogOpen(true);
+  const handleFeatureDialogClose = () => {
+    setFeatureDialogOpen(false);
   };
 
-  const handleDialogClose = () => {
-    setDialogOpen(false);
-  };
 
-  // react-color
-  const handleClick = () => {
-    setDisplayColorPicker(true);
-    console.log("color clicked");
-    setDialogSize({
-      width: "3000",
-      height: "3000",
-    });
-  };
-
-  const handleColorChange = (color) => {
-    setColorStyle({ color: color.rgb });
-    handleClose();
-  };
-
-    const newSelected = {
-    fill: {
-      color: `rgba(${colorStyle.color.r}, ${colorStyle.color.g}, ${colorStyle.color.b}, ${colorStyle.color.a})`,
-    },
-    // stroke: {
-    //   color: `rgba(${colorStyle.color.r}, ${colorStyle.color.g}, ${colorStyle.color.b}, ${colorStyle.color.a})`,
-    //   width: 2,
-    // },
-    // image: 
-    //   {type: 
-    //     {
-    //       radius: 7,
-    //       fill: {
-    //         color: `rgba(${colorStyle.color.r}, ${colorStyle.color.g}, ${colorStyle.color.b}, ${colorStyle.color.a})`,
-    //       },
-    //     },
-    //   }
-  };
-
-  const handleDialogSave = () => {
-
-    setDialogOpen(false);
-  };
-
-  const handleClose = () => {
-    setDisplayColorPicker(false);
-  };
-
-  const styles = reactCSS({
-    default: {
-      color: {
-        width: "36px",
-        height: "14px",
-        borderRadius: "2px",
-        background: `rgba(${colorStyle.color.r}, ${colorStyle.color.g}, ${colorStyle.color.b}, ${colorStyle.color.a})`,
-      },
-      swatch: {
-        padding: "5px",
-        background: "#fff",
-        borderRadius: "1px",
-        boxShadow: "0 0 0 1px rgba(0,0,0,.1)",
-        display: "inline-block",
-        cursor: "pointer",
-      },
-      popover: {
-        position: "absolute",
-        zIndex: "2",
-      },
-      cover: {
-        position: "fixed",
-        top: "0px",
-        right: "0px",
-        bottom: "0px",
-        left: "0px",
-      },
-    },
-  });
-
-  // slider
-  const valuetext = (value) => {
-    return `${value}`;
-  };
 
   // 셀렉박스
   const layerNames = [
@@ -508,17 +877,18 @@ export default function MainMap() {
   ];
 
 
-  const handleLayerStyleDialog = () => {
+  
 
-  }
 
   return (
     <div>
       <div id="map" className="map" style={mapStyle} />
+      <div id="info"> {wmsFeatInfoJsonRef.current} </div>
+
       <form>
-        <label for="type">Action type &nbsp;</label>
+        <label htmlFor="type">Action type &nbsp;</label>
         <select id="type">
-          <option value="click" selected>
+          <option value="click">
             Click
           </option>
           <option value="singleclick">Single-click</option>
@@ -527,6 +897,8 @@ export default function MainMap() {
           <option value="none">None</option>
         </select>
         <span id="status">&nbsp;0 selected features</span>
+        <div id="feature-info">
+        </div>
       </form>
 
       <div id="measurement-tooltip"></div>
@@ -537,9 +909,7 @@ export default function MainMap() {
         </button>
         <button onClick={() => handleMeasurementTypeChange("area")}>
           면적 측정
-          
         </button>
-        <button>측정도형삭제</button>
       </div>
 
       <div>
@@ -557,49 +927,76 @@ export default function MainMap() {
         <button onClick={() => handleLayerTypeChange("vector")}>
           벡터로 보기
         </button>
-        {displayStyleButton ? (<button
-        onClick={() => handleLayerStyleDialog()}>
-          레이어 스타일 바꾸기
-          {layerDialogOpen ? (<Dialog></Dialog>) : null}
-        </button>) : null}
-      </div>
 
-      {featureDialogOpen === true ? (
-        <Dialog
-          open={featureDialogOpen}
-          onClose={handleDialogClose}
-          PaperComponent={paperComponent}
-          aria-labelledby="draggable-dialog-title"
-          style={dialogSize}
+        {filterButton ? (<select value={filter} onChange={handleSelectedFilterChange}>
+          <option value="">원하는 필터를 선택하세요</option>
+          {fileterNames.map((l, idx) => (
+            <option key={idx} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>)
+        : null
+        }
+        {displayStyleButton ? (<button
+        onClick={() => handleLayerDialogOpen()}>
+          레이어 스타일 바꾸기
+        </button>
+        ) : null }
+        
+        {layerDialogOpen === true ? (<Dialog
+          open={layerDialogOpen}
+          aria-labelledby="dialog-title"
         >
           <DialogTitle
-            style={{ cursor: "move" }}
-            id="draggable-dialog-title"
+            id="dialog-title"
           ></DialogTitle>
-          <DialogContent>
-            <span>면 색상 변경</span>
-            <div id="polygon_color">
-              <div style={styles.swatch} onClick={handleClick}>
-                <div id="showCurColor" style={styles.color} />
+          <DialogContent
+            style={dialogSize}
+          >
+            <div>
+              면 색상 변경 &nbsp;
+              <div style={fillColorBarStyles.swatch} onClick={handleFillPickerOpen}>
+                <div id="showCurLayColor" style={fillColorBarStyles.color} />
               </div>
-              {displayColorPicker ? (
-                <div style={styles.popover}>
-                  <div style={styles.cover} onClick={handleDialogClose} />
+              {displayFillPicker ? (
+                <div style={fillColorBarStyles.popover}>
+                  <div style={fillColorBarStyles.cover} onClick={handleFillColorPickerClose} />
                   <SketchPicker
-                    color={colorStyle.color}
-                    onChange={(color) => handleColorChange(color)}
+                    color={fillColorStyle.color}
+                    onChange={(color) => handleFillColorChange(color)}
                   />
                 </div>
               ) : null}
+            </div> 
+
+            <br/>
+
+            <div>
+              선 색상 변경 &nbsp;
+            <div style={strokeColorBarStyles.swatch} onClick={handleStrokePickerOpen}>
+              <div style={strokeColorBarStyles.color}></div>
             </div>
-            <span>선 색 변경</span>
-            <div id="line_color"></div>
-            <span>선 굵기 변경</span>
-            <div id="line_stroke">
-              <Box sx={{ width: 100 }}>
+            {displayStrokePicker ? (
+              <div style={strokeColorBarStyles.popover}>
+                <div style={strokeColorBarStyles.cover} onClick={handleStrokePickerClose}></div>
+                <SketchPicker
+                  color={strokeColorStyle.color}
+                  onChange={(color) => handleStrokeColorChange(color)}
+                ></SketchPicker>
+              </div>
+            ) : null}
+            </div>
+
+            <br/>
+
+            <div id="stroke-width">
+              선 굵기 변경 &nbsp;
+              <Box sx={{ width: 180 }}>
                 <Slider
+                  aria-label="Temperature"
                   defaultValue={2}
-                  getAriaValueText={valuetext}
+                  getAriaValueText={strokeWidthSliderValue}
                   valueLabelDisplay="auto"
                   shiftStep={30}
                   step={1}
@@ -609,12 +1006,93 @@ export default function MainMap() {
                 />
               </Box>
             </div>
+
+            <br/>
+
+            <div>
+              포인트 색상 변경 &nbsp;
+            <div style={pointColorBarStyles.swatch} onClick={handlePointPickerOpen}>
+              <div style={pointColorBarStyles.color}></div>
+            </div>
+            {displayPointPicker ? (
+              <div style={pointColorBarStyles.popover}>
+                <div style={pointColorBarStyles.cover} onClick={handlePointPickerClose}></div>
+                <SketchPicker
+                  color={pointColorStyle.color}
+                  onChange={(color) => handlePointColorChange(color)}
+                ></SketchPicker>
+              </div>
+            ) : null}
+            </div>
+
+            <br/>
+
+            <div id="point-radius" className="container">
+              <div className="row">
+                <div className="col-6">
+                포인트 크기 변경
+                </div>
+                <div className="col-6">
+                <Box sx={{ width: 180 }}>
+                <Slider
+                  aria-label="Temperature"
+                  defaultValue={7}
+                  getAriaValueText={pointRadiusSliderValue}
+                  valueLabelDisplay="auto"
+                  shiftStep={30}
+                  step={1}
+                  marks
+                  min={0}
+                  max={20}
+                />
+              </Box>
+                </div>
+              </div>
+            </div>
+
           </DialogContent>
           <DialogActions>
-            <Button autoFocus onClick={handleDialogClose}>
+          <button
+            autoFocus onClick={handleLayerDialogClose}
+          >close</button>
+          <button id="layerStyleChanged" onClick={handleLayerDialogSave}>save</button>
+          </DialogActions>
+        </Dialog>) : null}
+      </div>
+
+      {featureDialogOpen === true ? (
+        <Dialog
+          open={featureDialogOpen}
+          onClose={handleFeatureDialogClose}
+          PaperComponent={paperComponent}
+          aria-labelledby="draggable-dialog-title"
+          style={dialogSize}
+        >
+          <DialogTitle
+            style={{ cursor: "move" }}
+            id="draggable-dialog-title"
+          ></DialogTitle>
+          <DialogContent>
+              <table style={{border:"1px solid #000000"}}>
+                <thead></thead>
+                <tbody>
+                  {Object.keys(featureInfo).map((item, idx) => {
+                    if(item.indexOf('geom') === -1){
+                      return(
+                        <tr key={idx}>
+                          <td>{item}</td>
+                          <td>{featureInfo[item]}</td>
+                        </tr>
+                      )
+                    }
+                  })}
+              </tbody>
+            </table>
+          </DialogContent>
+          <DialogActions>
+            <Button autoFocus onClick={handleFeatureDialogClose}>
               Cancel
             </Button>
-            <Button onClick={handleDialogSave}>Save</Button>
           </DialogActions>
         </Dialog>
       ) : null}
