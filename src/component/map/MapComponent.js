@@ -1,14 +1,15 @@
-import { createElement, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import React from "react";
 import axios from "axios";
-import Draw from "ol/interaction/Draw.js";
+import {Draw, Interaction, Modify} from "ol/interaction.js";
 import Map from "ol/Map.js";
 import Overlay from "ol/Overlay.js";
 import View from "ol/View.js";
 import Select from "ol/interaction/Select.js";
-import { Circle as CircleStyle, Fill, Stroke, Style } from "ol/style.js";
+import { Circle as CircleStyle, Fill, Stroke, Style, RegularShape, Text } from "ol/style.js";
+import { LineString, Point } from "ol/geom";
 import { OSM, Vector as VectorSource } from "ol/source.js";
-import { Tile as TileLayer, Vector as VectorLayer } from "ol/layer.js";
+import { Tile as TileLayer, Vector as VectorLayer, Group as LayerGroup } from "ol/layer.js";
 import { getArea, getLength } from "ol/sphere.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import TileWMS from "ol/source/TileWMS.js";
@@ -31,6 +32,8 @@ import proj4 from "proj4";
 import { register } from "ol/proj/proj4.js";
 import Projection from "ol/proj/Projection.js";
 import { AlignHorizontalLeftSharp } from "@mui/icons-material";
+import { clear } from "@testing-library/user-event/dist/clear";
+import { renderToString } from "react-dom/server";
 
 proj4.defs([
   ["EPSG:4326", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"],
@@ -131,6 +134,9 @@ export default function MainMap() {
   const [drawInteraction, setDrawInteraction] = useState("");
   const [drawVectorLayer ,setDrawVectorLayer] = useState('')
   const [measurementOverlay, setMeasurementOverlay] = useState("");
+  const [measuring, setMeasuring] = useState(false)
+  const [segmentChecked, setSegmentChecked] = useState(true);
+  const [clearPreviousChecked, setClearPreviousChecked] = useState(true);
   const [tileWmsSource, _setTileWmsSource] = useState("");
   const tileWmsSourceRef = useRef(tileWmsSource);
   const setTileWmsSource = (tileWmsSource) => {
@@ -266,6 +272,7 @@ export default function MainMap() {
       raster = new TileLayer({
         source: new OSM(),
       });
+      
 
       const newMap = new Map({
         layers: [raster],
@@ -283,91 +290,333 @@ export default function MainMap() {
     };
   }, [map]);
 
-  // 오버레이 띄우기
-  useEffect(() => {
-    if (map && measurementType && !measurementOverlay) {
-      const overlay = new Overlay({
-        offset: [10, 0],
-        positioning: "bottom-left",
-      });
-      map.addOverlay(overlay);
-      setMeasurementOverlay(overlay);
+  // // 오버레이 띄우기
+  // useEffect(() => {
+  //   if (map && measurementType && !measurementOverlay) {
+  //     const overlay = new Overlay({
+  //       offset: [10, 0],
+  //       positioning: "bottom-left",
+  //     });
+  //     setMeasurementOverlay(overlay);
+  //     map.addOverlay(overlay);
+  //   }
+  // }, [map, measurementType, measurementOverlay]);
+
+
+
+  const showSegment = document.getElementById('segments');
+  const clearPrevious = document.getElementById('clear');
+
+
+  const style = new Style({
+    fill: new Fill({
+      color: 'rgba(255, 255, 255, 0.2)',
+    }),
+    stroke: new Stroke({
+      color: 'rgba(0, 0, 0, 0.5)',
+      lineDash: [10, 10],
+      width: 2,
+    }),
+    image: new CircleStyle({
+      radius: 5,
+      stroke: new Stroke({
+        color: 'rgba(0, 0, 0, 0.7)',
+      }),
+      fill: new Fill({
+        color: 'rgba(255, 255, 255, 0.2)',
+      }),
+    }),
+  });
+
+  const labelStyle = new Style({
+    text: new Text({
+      font: '14px Calibri,sans-serif',
+      fill: new Fill({
+        color: 'rgba(255, 255, 255, 1)',
+      }),
+      backgroundFill: new Fill({
+        color: 'rgba(0, 0, 0, 0.7)',
+      }),
+      padding: [3, 3, 3, 3],
+      textBaseline: 'bottom',
+      offsetY: -15,
+    }),
+    image: new RegularShape({
+      radius: 8,
+      points: 3,
+      angle: Math.PI,
+      displacement: [0, 10],
+      fill: new Fill({
+        color: 'rgba(0, 0, 0, 0.7)',
+      }),
+    }),
+  });
+
+  const tipStyle = new Style({
+    text: new Text({
+      font: '12px Calibri,sans-serif',
+      fill: new Fill({
+        color: 'rgba(255, 255, 255, 1)',
+      }),
+      backgroundFill: new Fill({
+        color: 'rgba(0, 0, 0, 0.4)',
+      }),
+      padding: [2, 2, 2, 2],
+      textAlign: 'left',
+      offsetX: 15,
+    }),
+  });
+
+  const modifyStyle = new Style({
+    image: new CircleStyle({
+      radius: 5,
+      stroke: new Stroke({
+        color: 'rgba(0, 0, 0, 0.7)',
+      }),
+      fill: new Fill({
+        color: 'rgba(0, 0, 0, 0.4)',
+      }),
+    }),
+    text: new Text({
+      text: '그래그해서 수정!',
+      font: '12px Calibri,sans-serif',
+      fill: new Fill({
+        color: 'rgba(255, 255, 255, 1)',
+      }),
+      backgroundFill: new Fill({
+        color: 'rgba(0, 0, 0, 0.7)',
+      }),
+      padding: [2, 2, 2, 2],
+      textAlign: 'left',
+      offsetX: 15,
+    }),
+  });
+
+  const segmentStyle = new Style({
+    text: new Text({
+      font: '12px Calibri,sans-serif',
+      fill: new Fill({
+        color: 'rgba(255, 255, 255, 1)',
+      }),
+      backgroundFill: new Fill({
+        color: 'rgba(100, 0, 0, 0.4)',
+      }),
+      padding: [2, 2, 2, 2],
+      textBaseline: 'bottom',
+      offsetY: -12,
+    }),
+    image: new RegularShape({
+      radius: 6,
+      points: 3,
+      angle: Math.PI,
+      displacement: [0, 8],
+      fill: new Fill({
+        color: 'rgba(0, 0, 0, 0.4)',
+      }),
+    }),
+  });
+
+  const segmentStyles = [segmentStyle];
+
+  const formatLength = function (line) {
+    const length = getLength(line);
+    let output;
+    if (length > 100) {
+      output = Math.round((length / 1000) * 100) / 100 + ' km';
+    } else {
+      output = Math.round(length * 100) / 100 + ' m';
     }
-  }, [map, measurementType, measurementOverlay]);
+    return output;
+  };
+
+  const formatArea = function (polygon) {
+    const area = getArea(polygon);
+    let output;
+    if (area > 10000) {
+      output = Math.round((area / 1000000) * 100) / 100 + ' km\xB2';
+    } else {
+      output = Math.round(area * 100) / 100 + ' m\xB2';
+    }
+    return output;
+  };
+
+  const drawVectorSource = new VectorSource()
+
+  const modify = new Modify({source: drawVectorSource, style: modifyStyle});
+
+  let tipPoint;
+
+  function styleFunction(feature, segments, drawType, tip) {
+    const styles = [];
+    const geometry = feature.getGeometry();
+    const type = geometry.getType();
+    let point, label, line;
+    if (!drawType || drawType === type || type === 'Point') {
+      styles.push(style);
+      if (type === 'Polygon') {
+        point = geometry.getInteriorPoint();
+        label = formatArea(geometry);
+        line = new LineString(geometry.getCoordinates()[0]);
+      } else if (type === 'LineString') {
+        point = new Point(geometry.getLastCoordinate());
+        label = formatLength(geometry);
+        line = geometry;
+      }
+    }
+    if (segments && line) {
+      let count = 0;
+      line.forEachSegment(function (a, b) {
+        const segment = new LineString([a, b]);
+        const label = formatLength(segment);
+        if (segmentStyles.length - 1 < count) {
+          segmentStyles.push(segmentStyle.clone());
+        }
+        const segmentPoint = new Point(segment.getCoordinateAt(0.5));
+        segmentStyles[count].setGeometry(segmentPoint);
+        segmentStyles[count].getText().setText(label);
+        styles.push(segmentStyles[count]);
+        count++;
+      });
+    }
+    if (label) {
+      labelStyle.setGeometry(point);
+      labelStyle.getText().setText(label);
+      styles.push(labelStyle);
+    }
+    if (
+      tip &&
+      type === 'Point' &&
+      !modify.getOverlay().getSource().getFeatures().length
+    ) {
+      tipPoint = geometry;
+      tipStyle.getText().setText(tip);
+      styles.push(tipStyle);
+    }
+    return styles;
+  }
+  
+
+  const newDrawVectorLayer = new VectorLayer({
+    source: drawVectorSource,
+    title: "drawVector",
+    style: function (feature) {
+      return styleFunction(feature, showSegment.checked)
+    }
+  });
+
+  let draw;
+
+  function addInteraction() {
+    const drawType = measurementType === 'area'? 'Polygon' : 'LineString'
+    const activeTip =(drawType === 'Polygon' ? 'polygon' : 'line') +
+      '을 더 그리려면 클릭!';
+    const idleTip = '클릭해서 측정 시작!';
+    let tip = idleTip;
+    draw = new Draw({
+      source: drawVectorSource,
+      type: drawType,
+      style: function (feature) {
+        return styleFunction(feature, showSegment.checked, drawType, tip);
+      },
+    });
+    draw.on('drawstart', function () {
+      if (clearPrevious.checked) {
+        drawVectorSource.clear();
+      }
+      modify.setActive(false);
+      tip = activeTip;
+    });
+    draw.on('drawend', function () {
+      modifyStyle.setGeometry(tipPoint);
+      modify.setActive(true);
+      map.once('pointermove', function () {
+        modifyStyle.setGeometry();
+      });
+      tip = idleTip;
+      setMeasuring(false);
+    });
+    modify.setActive(true);
+    map.addInteraction(draw);
+
+    showSegment.onChange = function () {
+      drawVectorSource.changed();
+      draw.getOverlay().changed();
+
+    };
+    
+  }
 
   // 측정 인터랙션 추가
   useEffect(() => {
-    if (map && measurementType) {
-      if (drawInteraction) {
-        map.removeInteraction(drawInteraction);
+
+    if(measuring === true) {
+      if (map && measurementType) {
+        map.getInteractions().getArray().map((item) => {
+          if(item instanceof Draw){
+          map.removeInteraction(item)
+          }
+          })
+          map.getLayers().getArray().map((item) => {
+            if(item.get("title") === "drawVector"){
+              map.removeLayer(item)
+            }
+            })
       }
 
-      const drawVectorSource = new VectorSource()
+      addInteraction();
+      map.addLayer(newDrawVectorLayer);
+      map.addInteraction(modify);
+  }
 
-      const drawVectorLayer = new VectorLayer({
-        source: drawVectorSource,
-      });
-      map.addLayer(drawVectorLayer);
+}, [map, measurementType]);
 
-      const draw = new Draw({
-        source: drawVectorLayer.getSource(),
-        type: measurementType === "area" ? "Polygon" : "LineString",
-        style: new Style({
-          fill: new Fill({
-            color: "rgba(255, 255, 255, 0.2)",
-          }),
-          stroke: new Stroke({
-            color: "#ffcc33",
-            width: 2,
-          }),
-          image: new CircleStyle({
-            radius: 7,
-            fill: new Fill({
-              color: "#ffcc33",
-            }),
-          }),
-        }),
-      });
+useEffect(() => {
 
-      map.addInteraction(draw);
-      setDrawInteraction(draw);
+}, [segmentChecked])
 
-      let sketch;
-      draw.on("drawstart", (event) => {
-        sketch = event.feature;
-      });
 
-      draw.on("drawend", () => {
-        const geometry = sketch.getGeometry();
-        const type = geometry.getType();
-        let measurement;
-        let tooltipCoord;
-        if (type === "LineString") {
-          measurement = getLength(geometry);
-          tooltipCoord = geometry.getLastCoordinate();
-        } else if (type === "Polygon") {
-          measurement = getArea(geometry);
-          tooltipCoord = geometry.getInteriorPoint().getCoordinates();
-        }
-        const output =
-          type === "LineString"
-            ? `${(measurement/1000).toFixed(2)} km`
-            : `${measurement.toFixed(2)} km²`;
-        measurementOverlay.setElement(createMeasurementElement(output));
-        measurementOverlay.setPosition(tooltipCoord);
-        map.removeInteraction(draw);
-      });
+// segment 체크박스 핸들러
+  const handleSegment = () => {
+    if(segmentChecked === true) {
+      setSegmentChecked(false)
+    } else if(segmentChecked === false) {
+      setSegmentChecked(true)
     }
-  }, [map, measurementType, measurementOverlay]);
+  }
+
+  // 이전 측정 도형 clear 핸들러
+  const handleClearPrevious = () => {
+    if(clearPreviousChecked === true) {
+      setClearPreviousChecked(false)
+    } else if(clearPreviousChecked === false) {
+      setClearPreviousChecked(true)
+    }
+  }
+
+  // draw된 레이어 전체 지우기
+  const handleRemoveDrawVectorLayer = () => {
+    map.removeOverlay(measurementOverlay)
+
+    const drawVector = map.getLayers().getArray().filter(item => item.get("title") === "drawVector");
+    
+    if(drawVector.length > 0) {
+      drawVector.forEach((layer) => layer.getSource().clear())
+    }
+    // map.getLayers().getArray()
+    // .filter(layer => layer === drawVectorLayer)
+    // .forEach(layer => map.removeLayer(layer))
+  }
 
   // 측정 관련 메서드
-  const handleMeasurementTypeChange = (type) => {
-    if(addedLayer) {
-      setLayerType("")
-      setAddedLayer('');
-    }
+  const handleMeasurementTypeSelect = (type) => {
+    // if(addedLayer) {
+    //   setLayerType("")
+    //   setAddedLayer('');
+    // }
     setMeasurementType(type);
-
+    setMeasuring(true)
+    map.removeInteraction(draw);
+    addInteraction();
   };
 
   const handleLayerSelectChange = (e) => {
@@ -414,6 +663,7 @@ export default function MainMap() {
       source: wmsSource,
       serverType: "geoserver",
       crossOrigin: "anonymous",
+      title: layerName,
     });
     // return new TileLayer({
     //   extent: extent,
@@ -665,7 +915,7 @@ export default function MainMap() {
   };
 
   // 벡터 레이어 style function
-  const style = function (feature) {
+  const vectorLayerStyle = function (feature) {
     const selectedLayerStyle = new Style({
       fill: new Fill({
         color: `rgba(${vectorFillColor.color.r}, ${vectorFillColor.color.g}, ${vectorFillColor.color.b}, ${vectorFillColor.color.a})`,
@@ -710,7 +960,7 @@ export default function MainMap() {
           layerName +
           "&outputFormat=application/json&srsname=" +
           proj +
-          "&bbox=" +
+          "&maxCount=30000&bbox=" +
           extent.join(",") +
           "," +
           proj;
@@ -732,7 +982,7 @@ export default function MainMap() {
     return new VectorLayer({
       title: layerName,
       source: vectorSource,
-      style: style,
+      style: vectorLayerStyle,
     });
   };
 
@@ -741,12 +991,16 @@ export default function MainMap() {
     if (map && selectedLayer) {
       // 이미 추가된 레이어 있는 경우 모든 레이어 제거
       if (addedLayer) {
-        map.removeLayer(addedLayer);
+        //map.removeLayer(addedLayer);
         setFilterButton(false);
         setDisplayStyleButton(false);
         setWmsClicked(false);
+        setWmsFeatInfoJson('');
         setFeatureInfo(null);
-        setWmsFeatInfoJson('')
+
+        map.getLayers().getArray()
+          .filter(layer => layer.get('title') !== undefined)
+          .forEach(layer => map.removeLayer(layer)) // title을 검출하고 있는경우 db연결된 레이어일 경우. 
       }
 
       console.log("selectedLayer: ", selectedLayer);
@@ -754,7 +1008,7 @@ export default function MainMap() {
       let layer;
       if (layerType === "tile") {
         layer = createTileLayer(selectedLayer, filter);
-        setFilterButton(true);
+        setFilterButton(true); // selectedLayer.includes("admin") === true
       } else if (layerType === "vector") {
         layer = createVectorLayer(selectedLayer);
         // 해당레이어의 스타일을 변경하는 버튼 표출
@@ -777,8 +1031,9 @@ export default function MainMap() {
 
       // })
 
-      selectElement.onchange = changeInteraction;
+      selectElement.onchange = changeInteraction; 
       changeInteraction();
+
     }
   };
 
@@ -834,6 +1089,7 @@ export default function MainMap() {
 
       map.on("singleclick", settingWmsData);
 
+      
       return () => {
         map.un("singleclick", settingWmsData)};
     }
@@ -878,18 +1134,16 @@ export default function MainMap() {
 
     // const length = e.selected[0].getKeys().length
     // console.log(length)
-
-    if (e.selected[0] !== undefined) {
-
-      setFeatureInfo(e.selected[0].getProperties());
-      setFeatureDialogOpen(true);
-      console.log("selected")
-
-    } else {
-      console.log('not selected')
-    }
-
-
+//  && selectedId.includes(selectedLayer) === true
+      if (e.selected[0] !== undefined) { // 우선 select로 인식되는 피처가 있는지 판별
+        if(e.selected[0].getId()!== undefined) { // 그러고나서 그 피처가 id 값을 가지고있는지 판별 = db에 있는 레이어 띄운 경우인지 알아보려고 한 것
+        setFeatureInfo(e.selected[0].getProperties());
+        setFeatureDialogOpen(true);
+        } else {
+        }
+      } else {
+      }
+    
     // const featureInfo = document.getElementById('#feature-info')
 
     // document.write('<table border="1">');
@@ -972,6 +1226,10 @@ export default function MainMap() {
     setFeatureDialogOpen(false);
   };
 
+  // #region start
+
+  // #endregion start
+
   // 셀렉박스
   const layerNames = [
     "admin_emd",
@@ -1025,13 +1283,23 @@ export default function MainMap() {
       <div id="measurement-tooltip"></div>
 
       <div>
-        <button onClick={() => handleMeasurementTypeChange("length")}>
+        <button onClick={() => handleMeasurementTypeSelect("length")}>
           길이 측정
         </button>
-        <button onClick={() => handleMeasurementTypeChange("area")}>
+        <button onClick={() => handleMeasurementTypeSelect("area")}>
           면적 측정
         </button>
+        <button onClick={() => handleRemoveDrawVectorLayer()}>
+          측정 도형 지우기
+        </button>
       </div>
+
+
+      <label for="segments">💫 부분 측정 보이기:&nbsp;</label>
+      <input type="checkbox" id="segments" checked={segmentChecked} onChange={handleSegment}/>
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      <label for="clear">💫 이전 측정 기록 지우기:&nbsp;</label>
+      <input type="checkbox" id="clear" checked={clearPreviousChecked} onChange={handleClearPrevious} />
 
       <div>
         <select value={selectedLayer} onChange={handleLayerSelectChange}>
